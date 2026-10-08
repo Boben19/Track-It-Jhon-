@@ -1,0 +1,175 @@
+import pandas as pd
+import numpy as np
+from scipy import stats
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import os
+print(os.getcwd())
+print(os.listdir())
+
+#**1. LOAD THE DATASET (Pandas)**
+df = pd.read_csv("personal_expenses_august2026.csv", parse_dates=["Date"])
+
+df["Notes"] = df["Notes"].fillna("")
+
+print("PERSONAL EXPENSE ANALYZER - AUGUST 2026")
+print("-" * 60)
+print(f"\nDataset loaded: {len(df)} days of records")
+print(f"Columns: {list(df.columns)}\n")
+
+#**2. PANDAS OPERATIONS**
+# (a) Filtering - isolate the days that had a hangout/social expense
+hangout_days = df[df["Social_Hangout"] > 0]
+print(f"Days with a hangout/social expense: {len(hangout_days)} out of {len(df)}")
+
+# (b) Sorting - find the 5 most expensive days of the month
+top_spending_days = df.sort_values("Daily_Total", ascending=False).head(5)
+print("\nTop 5 highest-spending days:")
+print(top_spending_days[["Date", "Day", "Daily_Total", "Notes"]].to_string(index=False))
+
+# (c) Grouping - average spending per day of the week
+avg_by_weekday = df.groupby("Day")["Daily_Total"].mean().round(2)
+weekday_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+avg_by_weekday = avg_by_weekday.reindex(weekday_order)
+print("\nAverage spending per weekday:")
+print(avg_by_weekday.to_string())
+
+# (d) Summary table - weekly totals (food vs gas vs combined)
+weekly_summary = df.groupby("Week").agg(
+    Food_Total=("Food_Subtotal", "sum"),
+    Gas_Total=("Gas", "sum"),
+    Week_Total=("Daily_Total", "sum"),
+    Days=("Date", "count")
+)
+print("\nWeekly summary table:")
+print(weekly_summary.to_string())
+
+#**3. NUMPY CALCULATIONS**
+daily_totals = df["Daily_Total"].to_numpy()
+food_totals = df["Food_Subtotal"].to_numpy()
+gas_totals = df["Gas"].to_numpy()
+
+mean_daily = np.mean(daily_totals)
+median_daily = np.median(daily_totals)
+std_daily = np.std(daily_totals)
+max_day = np.max(daily_totals)
+min_day = np.min(daily_totals)
+total_month = np.sum(daily_totals)
+gas_percentage = (np.sum(gas_totals) / total_month) * 100
+
+print("NUMPY STATISTICS - DAILY TOTAL SPENDING (PHP)")
+print("-" * 60)
+print(f"Mean (average):        {mean_daily:.2f}")
+print(f"Median:                 {median_daily:.2f}")
+print(f"Standard deviation:     {std_daily:.2f}")
+print(f"Highest spending day:   {max_day:.2f}")
+print(f"Lowest spending day:    {min_day:.2f}")
+print(f"Total spent in August:  {total_month:.2f}")
+print(f"Gas as % of total:      {gas_percentage:.2f}%")
+
+#**4. SCIPY - CORRELATION ANALYSIS**
+corr_food_total, p_food = stats.pearsonr(food_totals, daily_totals)
+corr_gas_total, p_gas = stats.pearsonr(gas_totals, daily_totals)
+
+hangout_totals = df[df["Social_Hangout"] > 0]["Daily_Total"]
+normal_totals = df[df["Social_Hangout"] == 0]["Daily_Total"]
+t_stat, p_ttest = stats.ttest_ind(hangout_totals, normal_totals)
+
+print("SCIPY - STATISTICAL ANALYSIS")
+print("-" * 60)
+print(f"Correlation (Food subtotal vs Daily total):  r = {corr_food_total:.3f}  (p = {p_food:.4f})")
+print(f"Correlation (Gas vs Daily total):             r = {corr_gas_total:.3f}  (p = {p_gas:.4f})")
+print(f"\nHangout-day average:  PHP {hangout_totals.mean():.2f}  (n={len(hangout_totals)})")
+print(f"Normal-day average:   PHP {normal_totals.mean():.2f}  (n={len(normal_totals)})")
+print(f"Independent t-test:   t = {t_stat:.3f}, p = {p_ttest:.4f}")
+if p_ttest < 0.05:
+    print("-> The difference between hangout days and normal days is statistically significant.")
+else:
+    print("-> The difference is not statistically significant at the 0.05 level.")
+
+#**5. MATPLOTLIB VISUALIZATIONS**
+plt.rcParams.update({"font.size": 10})
+
+# Chart 1: Bar chart - weekly total spending
+fig1, ax1 = plt.subplots(figsize=(7, 4.5))
+weeks = ["Week " + str(w) for w in weekly_summary.index]
+ax1.bar(weeks, weekly_summary["Week_Total"], color="#4C72B0")
+ax1.set_title("Total Spending per Week - August 2026")
+ax1.set_xlabel("Week")
+ax1.set_ylabel("Total Spent (PHP)")
+ax1.yaxis.set_major_formatter(mticker.StrMethodFormatter("{x:,.0f}"))
+for i, v in enumerate(weekly_summary["Week_Total"]):
+    ax1.text(i, v + 30, f"{v:,.0f}", ha="center", fontsize=9)
+fig1.tight_layout()
+fig1.savefig("chart1_weekly_bar.png", dpi=150)
+plt.show(fig1)
+
+# Chart 2: Line graph - daily total spending trend across the month
+fig2, ax2 = plt.subplots(figsize=(9, 4.5))
+ax2.plot(df["Date"], df["Daily_Total"], marker="o", markersize=3, color="#DD8452")
+ax2.axhline(mean_daily, color="gray", linestyle="--", linewidth=1, label=f"Average ({mean_daily:.0f})")
+ax2.set_title("Daily Total Spending Trend - August 2026")
+ax2.set_xlabel("Date")
+ax2.set_ylabel("Amount Spent (PHP)")
+ax2.legend()
+fig2.autofmt_xdate(rotation=45)
+fig2.tight_layout()
+fig2.savefig("chart2_daily_line.png", dpi=150)
+plt.show(fig2)
+
+# Chart 3: Pie chart - category share of monthly spending
+category_totals = {
+    "Breakfast": df["Breakfast"].sum(),
+    "Morning Snack": df["Morning_Snack"].sum(),
+    "Lunch": df["Lunch"].sum(),
+    "Afternoon Snack": df["Afternoon_Snack"].sum(),
+    "Dinner": df["Dinner"].sum(),
+    "Social/Hangout": df["Social_Hangout"].sum(),
+    "Gas": df["Gas"].sum(),
+}
+fig3, ax3 = plt.subplots(figsize=(6.5, 6.5))
+ax3.pie(
+    category_totals.values(),
+    labels=category_totals.keys(),
+    autopct="%1.1f%%",
+    startangle=90,
+    colors=plt.cm.Set2.colors,
+)
+ax3.set_title("Where the Money Went - August 2026")
+fig3.tight_layout()
+fig3.savefig("chart3_category_pie.png", dpi=150)
+plt.show(fig3)
+
+# Chart 4: Scatter plot - food spending vs daily total (supports the SciPy correlation)
+fig4, ax4 = plt.subplots(figsize=(6.5, 5))
+ax4.scatter(df["Food_Subtotal"], df["Daily_Total"], color="#55A868", alpha=0.8)
+z = np.polyfit(df["Food_Subtotal"], df["Daily_Total"], 1)
+trend = np.poly1d(z)
+x_line = np.linspace(df["Food_Subtotal"].min(), df["Food_Subtotal"].max(), 100)
+ax4.plot(x_line, trend(x_line), color="#C44E52", linestyle="--", label="Trend line")
+ax4.set_title(f"Food Subtotal vs Daily Total (r = {corr_food_total:.2f})")
+ax4.set_xlabel("Food Subtotal (PHP)")
+ax4.set_ylabel("Daily Total (PHP)")
+ax4.legend()
+fig4.tight_layout()
+fig4.savefig("chart4_scatter.png", dpi=150)
+plt.show(fig4)
+
+# Chart 5: Histogram - distribution of daily spending
+fig5, ax5 = plt.subplots(figsize=(6.5, 4.5))
+ax5.hist(df["Daily_Total"], bins=8, color="#8172B2", edgecolor="white")
+ax5.axvline(mean_daily, color="black", linestyle="--", label=f"Mean = {mean_daily:.0f}")
+ax5.set_title("Distribution of Daily Spending - August 2026")
+ax5.set_xlabel("Daily Total (PHP)")
+ax5.set_ylabel("Number of Days")
+ax5.legend()
+fig5.tight_layout()
+fig5.savefig("chart5_histogram.png", dpi=150)
+plt.show(fig5)
+
+print("\nAll 5 charts saved as PNG files.")
+print("\nDone.")
+
+
+
+
